@@ -5,6 +5,8 @@
 
 #include <unicorn/unicorn.h>
 
+#define DATA 65537
+#define CANARY 0xFFFFFFFF
 using namespace std;
 
 /**
@@ -40,20 +42,26 @@ public:
     bool reg_write(int regid, const void *value);
 
     // 实现寄存器初始化 以及 参数传递
-    bool init_arg(void* data,size_t size);
+    bool init_reg(void* data,size_t size);
+    bool insert_arg(uint64_t data);
 
 private:
-    Runtime *rt_;
+    Runtime *rt_;   //Runtime对象
     uc_engine *uc_; //Unicorn对象
     uc_err err_;    //Unicorn错误类型
     uc_arch arch_;  //Unicorn对象架构
     uc_mode mode_;  //Unicorn对象运行模式
+
     bool inited = false;    //是否使用set_env初始化
+    uint64_t arg_num = 0;   //当前函数参数个数（记得每次运行前重置）
 private:
     Memory(){}
     //Memory(uc_engine *uc,uc_arch arch,uc_mode mode):uc_(uc),arch_(arch),mode_(mode)
     
 };
+
+
+// 封装 Unicorn 的 Memory 相关API
 
 bool Memory::mem_map(uint64_t address, size_t size, uint32_t perms)
 {
@@ -132,25 +140,39 @@ bool Memory::reg_write(int regid, const void *value)
     return true;  
 }
 
-bool Memory::init_arg(void* data,size_t size)
+// 初始化对应架构的寄存器等
+
+bool Memory::init_reg(void* data,size_t size)
 {
+    arg_num=0; 
     switch(this->arch_){
     case UC_ARCH_X86:{
         switch(this->mode_){
             case UC_MODE_64:
             {
+                /*
                 uint64_t r_rdi = reinterpret_cast<uint64_t>(this->rt_->data());
                 uint64_t r_rdx = reinterpret_cast<uint64_t>(this->rt_->data());
                 uint64_t r_rsi = size;
-                uint64_t r_rsp = this->rt_->stack_top();
                 this->mem_map(this->rt_->data(), size , UC_PROT_ALL);
                 this->mem_write(this->rt_->data() , data, size - 1);
                 this->reg_write( UC_X86_REG_RDI, &r_rdi);
                 this->reg_write( UC_X86_REG_RSI, &r_rsi);
                 //this->reg_write( UC_X86_REG_RDX, &r_rdx);
+                */
 
+                //初始化 栈空间 和 测试数据data的空间
+                uint64_t r_rsp = this->rt_->stack_top();
                 this->mem_map(this->rt_->stack(), this->rt_->stack_size() , UC_PROT_ALL);
                 this->reg_write(UC_X86_REG_RSP, &r_rsp);
+
+                this->mem_map(this->rt_->data(), size , UC_PROT_ALL);
+                this->mem_write(this->rt_->data() , data, size - 1);
+
+                //在data内存后设置canary
+                uint32_t canary=CANARY; //#0xFFFFFFFF
+                this->mem_write(this->rt_->data()+size, &canary, 4);
+
                 break;
             }
             case UC_MODE_32: break;
@@ -164,5 +186,81 @@ bool Memory::init_arg(void* data,size_t size)
     }
     return true;
 }
+
+// 根据不同架构的 调用约定 传递参数
+bool Memory::insert_arg(uint64_t arg)
+{
+    switch(this->arch_){
+    case UC_ARCH_X86:{
+        switch(this->mode_){
+            case UC_MODE_64:
+            {
+                uint64_t reg;
+                if(arg == DATA)  //参数为DATA 默认选择data(void *)作为参数
+                    reg =reinterpret_cast<uint64_t>(this->rt_->data()); 
+                else
+                    reg = arg;
+                // 依据x86架构64位的 函数调用约定 传递参数 : RDI RSI RDX RCX R8 R9
+                switch(this->arg_num){
+                    case 0:
+                    {
+                        this->reg_write( UC_X86_REG_RDI, &reg); 
+                        break;
+                    }
+                    case 1:
+                    {
+                       this->reg_write( UC_X86_REG_RSI, &reg); 
+                       break;
+                    }
+                    case 2:
+                    {
+                       this->reg_write( UC_X86_REG_RDX, &reg); 
+                       break;
+                    }
+                    case 3:
+                    {
+                       this->reg_write( UC_X86_REG_RCX, &reg); 
+                       break;
+                    }
+                    case 4:
+                    {
+                       this->reg_write( UC_X86_REG_R8D, &reg); 
+                       break;
+                    }
+                    case 5:
+                    {
+                       this->reg_write( UC_X86_REG_R9D, &reg); 
+                       break;
+                    }
+                    default:
+                    {
+                        cout << "Error in insert arg, too many args ! " << endl;
+                        break;
+                    }
+                       
+                }
+                break;
+            }
+            default:
+            {
+                cout << "Error Mode in insert arg" << endl;
+                break;
+            }
+
+        }
+        break;
+    }
+    default:
+    {
+        cout << "Error ARCH in insert arg" << endl;
+        break;
+    }
+        
+    }
+    this->arg_num++;
+
+    return true;
+}
+
 
 #endif

@@ -69,19 +69,35 @@ typedef enum uc_mode {
 } uc_mode;
 */
 
-void hook_code(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data);
-
+//void hook_code(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data);
+uint64_t data_size;
+uint64_t data_addr;
 
 /**
 Fuzzer模块,需在LLVMFuzzerTestOneInput中声明/调用，用于生成一个模糊测试的基本对象。
 Fuzzer基于Unicorn来实现任意架构二进制文件模拟，通过hook函数来实现覆盖率检测和内存问题(原版libfuzzer使用插桩实现)。
 优点：无需源代码，无需在意架构，fuzz anywhere，anything.
-缺点：继承了一部分libfuzzer原理导致但缺点（但也解决了最大的痛点）
+缺点：继承了一部分libfuzzer原理导致的缺点（但也解决了最大的痛点）
 使用案例：
 */
 class Fuzzer
 {
 public:
+    // 钩子函数 用于检测函数是否存在栈溢出
+    static void hook_code(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data)
+    {
+        //printf("HOOK_CODE: 0x%" PRIx64 ", 0x%x\n", addr, size);
+        uint32_t canary;
+        uc_mem_read(uc,data_addr+data_size, &canary, 4);
+        //printf("canary=0x%x ",canary);
+        if(canary!=CANARY) //0xFFFFFFFF
+        {
+          //printf("wrong canary=%d || %d ",canary1, canary2);
+          fprintf(stderr, "========= ERROR:InfiniteSanitizer: stack overflow on address 0x%lx at pc 0x%lx bp  sp  \n",(data_addr+data_size),addr);
+          abort();
+        }
+    }
+    // 构造函数初始化
     Fuzzer(string target):target(target){}
     Fuzzer(string target, uint64_t start, uint64_t end, uc_arch arch, uc_mode mode):target(target){
         
@@ -117,11 +133,23 @@ public:
     }
     void start(void* data,size_t size)
     {
+        //映射内存和初始化寄存器
         map_target();
-        mem->init_arg(data,size);
+        mem->init_reg(data,size);
+
+        //写入对应参数（这部分仍需改进）
+        mem->insert_arg(DATA);
+        mem->insert_arg(size);
+        mem->insert_arg(DATA);
+
+        // 设置钩子 1. 反馈代码覆盖率 2. 检测内存问题
         uc_hook code_hook,block_hook;
+        data_size = size;
+        data_addr = rt->data();
         err = uc_hook_add(uc, &code_hook, UC_HOOK_CODE, reinterpret_cast<void *>(hook_code), NULL, 1, 0);
-        err=uc_emu_start(this->uc,rt->start(),rt->end(),0,0);
+
+        // 运行
+        err = uc_emu_start(this->uc,rt->start(),rt->end(),0,0);
         if (err) {
             printf("Failed on uc_emu_start() with error returned %u: %s\n",
             err, uc_strerror(err));
@@ -129,6 +157,7 @@ public:
             abort();
   }
     }
+
 private:
     Runtime* rt;
     Memory* mem;
@@ -137,6 +166,7 @@ private:
     char* bin_buffer;
     uc_engine *uc;
     uc_err err;
+    //uint64_t data_size;
 };
 
 // 载入整个目标文件到内存中
@@ -168,11 +198,21 @@ inline bool Fuzzer::load_target()
 
     return true;
 }
-
+/*
 void hook_code(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data)
 {
-    printf("HOOK_CODE: 0x%" PRIx64 ", 0x%x\n", addr, size);
+    //printf("HOOK_CODE: 0x%" PRIx64 ", 0x%x\n", addr, size);
+    char canary;
+    mem->mem_read(rt->data()+data_size, &canary, 1);
+    //printf("canary=0x%x ",canary);
+    if(canary!='X')
+    {
+      //printf("wrong canary=%d || %d ",canary1, canary2);
+      fprintf(stderr, "========= ERROR:InfiniteSanitizer: stack overflow on address 0x%lx at pc 0x%lx bp  sp  \n",(rt->data()+data_size),addr);
+      abort();
+    }
 }
+*/
 
 
 #endif
