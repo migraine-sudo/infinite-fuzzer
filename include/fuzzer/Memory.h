@@ -44,6 +44,9 @@ public:
     // 实现寄存器初始化 以及 参数传递
     bool init_reg(void* data,size_t size);
     bool insert_arg(uint64_t data);
+    template<class T,class ...Args>
+    bool set_args(T head,Args... args);
+    bool set_args();
 
 private:
     Runtime *rt_;   //Runtime对象
@@ -60,85 +63,6 @@ private:
     
 };
 
-
-// 封装 Unicorn 的 Memory 相关API
-
-bool Memory::mem_map(uint64_t address, size_t size, uint32_t perms)
-{
-    if(!this->inited)
-    {
-        cout << "The memory has not been initialized !" << endl;
-        return false;
-    }
-    uc_mem_map(this->uc_, address, size, perms);
-    return true;
-}
-
-bool Memory::mem_unmap(uint64_t address, size_t size)
-{
-   if(!this->inited)
-    {
-        cout << "The memory has not been initialized !" << endl;
-        return false;
-    }
-    uc_mem_unmap(this->uc_, address, size);
-    return true; 
-}
-
-bool Memory::mem_map_ptr(uint64_t address, size_t size, uint32_t perms, void *ptr)
-{
-   if(!this->inited)
-    {
-        cout << "The memory has not been initialized !" << endl;
-        return false;
-    }
-    uc_mem_map_ptr(this->uc_, address, size, perms, ptr);
-    return true;  
-}
-
-bool Memory::mem_read(uint64_t address, void *bytes, size_t size)
-{
-    if(!this->inited)
-    {
-        cout << "The memory has not been initialized !" << endl;
-        return false;
-    }
-    uc_mem_read(this->uc_, address, bytes, size);
-    return true; 
-}
-
-bool Memory::mem_write(uint64_t address, const void *bytes, size_t size)
-{
-    if(!this->inited)
-    {
-        cout << "The memory has not been initialized !" << endl;
-        return false;
-    }
-    uc_mem_write(this->uc_, address, bytes, size);
-    return true; 
-}
-
-bool Memory::reg_read(int regid, void *value)
-{
-    if(!this->inited)
-    {
-        cout << "The memory has not been initialized !" << endl;
-        return false;
-    }
-    uc_reg_read(this->uc_, regid, value);
-    return true;  
-}
-
-bool Memory::reg_write(int regid, const void *value)
-{
-    if(!this->inited)
-    {
-        cout << "The memory has not been initialized !" << endl;
-        return false;
-    }
-    uc_reg_write(this->uc_, regid, value);
-    return true;  
-}
 
 // 初始化对应架构的寄存器等
 
@@ -235,6 +159,7 @@ bool Memory::insert_arg(uint64_t arg)
                     default:
                     {
                         cout << "Error in insert arg, too many args ! " << endl;
+                        return false;
                         break;
                     }
                        
@@ -244,6 +169,7 @@ bool Memory::insert_arg(uint64_t arg)
             default:
             {
                 cout << "Error Mode in insert arg" << endl;
+                return false;
                 break;
             }
 
@@ -253,6 +179,7 @@ bool Memory::insert_arg(uint64_t arg)
     default:
     {
         cout << "Error ARCH in insert arg" << endl;
+        return false;
         break;
     }
         
@@ -261,6 +188,111 @@ bool Memory::insert_arg(uint64_t arg)
 
     return true;
 }
+
+template<class T,class ...Args>
+bool Memory::set_args(T head,Args... args)
+{
+    if(head == (uint64_t)DATA)
+        this->insert_arg(DATA);
+
+    else
+        this->insert_arg((uint64_t)head);
+    
+    //cout << " head = " << head << endl;
+    return this->set_args(args...);
+}
+
+bool Memory::set_args()
+{
+    //cout << "empty" << endl; // 递归出口
+    return true;
+}
+
+
+
+
+
+
+/** 封装 Unicorn 的 Memory 相关API **/
+
+bool Memory::mem_map(uint64_t address, size_t size, uint32_t perms)
+{
+    if(!this->inited)
+    {
+        cout << "The memory has not been initialized !" << endl;
+        return false;
+    }
+    uc_mem_map(this->uc_, address, size, perms);
+    return true;
+}
+
+bool Memory::mem_unmap(uint64_t address, size_t size)
+{
+   if(!this->inited)
+    {
+        cout << "The memory has not been initialized !" << endl;
+        return false;
+    }
+    uc_mem_unmap(this->uc_, address, size);
+    return true; 
+}
+
+bool Memory::mem_map_ptr(uint64_t address, size_t size, uint32_t perms, void *ptr)
+{
+   if(!this->inited)
+    {
+        cout << "The memory has not been initialized !" << endl;
+        return false;
+    }
+    uc_mem_map_ptr(this->uc_, address, size, perms, ptr);
+    return true;  
+}
+
+bool Memory::mem_read(uint64_t address, void *bytes, size_t size)
+{
+    if(!this->inited)
+    {
+        cout << "The memory has not been initialized !" << endl;
+        return false;
+    }
+    uc_mem_read(this->uc_, address, bytes, size);
+    return true; 
+}
+
+bool Memory::mem_write(uint64_t address, const void *bytes, size_t size)
+{
+    if(!this->inited)
+    {
+        cout << "The memory has not been initialized !" << endl;
+        return false;
+    }
+    uc_mem_write(this->uc_, address, bytes, size);
+    return true; 
+}
+
+bool Memory::reg_read(int regid, void *value)
+{
+    if(!this->inited)
+    {
+        cout << "The memory has not been initialized !" << endl;
+        return false;
+    }
+    uc_reg_read(this->uc_, regid, value);
+    return true;  
+}
+
+bool Memory::reg_write(int regid, const void *value)
+{
+    if(!this->inited)
+    {
+        cout << "The memory has not been initialized !" << endl;
+        return false;
+    }
+    uc_reg_write(this->uc_, regid, value);
+    return true;  
+}
+
+
 
 
 #endif
