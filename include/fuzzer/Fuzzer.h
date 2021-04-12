@@ -12,6 +12,8 @@
 #include "Runtime.h"
 #include "Memory.h"
 
+#define PCS_N (1 << 12)
+
 using namespace std;
 
 /* Unicorn
@@ -73,6 +75,10 @@ typedef enum uc_mode {
 uint64_t data_size;
 uint64_t data_addr;
 
+__attribute__((section("__libfuzzer_extra_counters")))
+uint8_t Counters[PCS_N];
+
+
 /**
 Fuzzer模块,需在LLVMFuzzerTestOneInput中声明/调用，用于生成一个模糊测试的基本对象。
 Fuzzer基于Unicorn来实现任意架构二进制文件模拟，通过hook函数来实现覆盖率检测和内存问题(原版libfuzzer使用插桩实现)。
@@ -122,6 +128,13 @@ public:
         }
     }
 
+    static void hook_block(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data)
+    {
+        //printf("HOOK_BLOCK: 0x%" PRIx64 ", 0x%x\n", addr, size);
+        Counters[addr]++;
+    }
+
+
     void entrance(void* data,size_t size);    // 设置函数 入口和结束地址
     template <class ...Args>
     void start(Args... args);                 //  开始fuzz
@@ -159,8 +172,8 @@ void Fuzzer::start(Args... args)
 
     // 设置钩子 1. 反馈代码覆盖率 2. 检测内存问题
     uc_hook code_hook,block_hook;
-    err = uc_hook_add(uc, &code_hook, UC_HOOK_CODE, reinterpret_cast<void *>(hook_code), NULL, 1, 0);
-
+    uc_hook_add(uc, &code_hook, UC_HOOK_CODE, reinterpret_cast<void *>(hook_code), NULL, 1, 0);
+    uc_hook_add(uc, &block_hook, UC_HOOK_BLOCK, reinterpret_cast<void *>(hook_block), NULL, 1, 0);
     // 运行
     err = uc_emu_start(this->uc,rt->start(),rt->end(),0,0);
     if (err) {
