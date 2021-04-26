@@ -26,6 +26,8 @@ vuln: vuln.cc # 警告，重新编译会导致测试目标代码段偏移，导�
 #	$(CXX) $(CFLAGS) $(LDFLAGS) demo-unicorn.cc -o demo
 demo: demo.cc
 	$(CXX) $(CFLAGS) $(LDFLAGS) $(FUZZER) demo.cc -o myfuzzer
+demo2: demo2.cc
+	$(CXX) $(CFLAGS) $(LDFLAGS) $(FUZZER) demo2.cc -o myfuzzer
 task1: example/task1.cc
 	$(CXX) $(CFLAGS) $(LDFLAGS) example/task1.cc -o task1
 task2: example/task2.cc
