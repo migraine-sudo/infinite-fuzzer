@@ -128,6 +128,9 @@ public:
         }
     }
 
+
+    // 利用Libufuzzer extra counters 反馈覆盖率
+
     static void hook_block(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data)
     {
         //printf("HOOK_BLOCK: 0x%" PRIx64 ", 0x%x\n", addr, size);
@@ -138,16 +141,14 @@ public:
     void entrance(void* data,size_t size);    // 设置函数 入口和结束地址
     template <class ...Args>
     void start(Args... args);                 //  开始fuzz
-
+    bool result() const {return if_end_;}
 
 protected:
 
     bool load_target();         //  载入目标到内存(bin_buffer)中
     bool map_target();          //  映射bin_buffer内容到内存中
 
-
 private:
-
     Runtime* rt;
     Memory* mem;
     string target;
@@ -155,6 +156,7 @@ private:
     char* bin_buffer;
     uc_engine *uc;
     uc_err err;
+    bool if_end_ = false;
 };
 
 
@@ -179,6 +181,7 @@ void Fuzzer::start(Args... args)
     if (err) {
         printf("Failed on uc_emu_start() with error returned %u: %s\n",
         err, uc_strerror(err));
+        if_end_ = true;
         abort();
     }
 }
