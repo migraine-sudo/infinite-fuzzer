@@ -28,6 +28,8 @@ demo: demo.cc
 	$(CXX) $(CFLAGS) $(LDFLAGS) $(FUZZER) demo.cc -o myfuzzer
 demo2: demo2.cc
 	$(CXX) $(CFLAGS) $(LDFLAGS) $(FUZZER) demo2.cc -o myfuzzer
+demo3: demo3.cc
+	$(CXX) $(CFLAGS) $(LDFLAGS) $(FUZZER) demo3.cc -o myfuzzer
 task1: example/task1.cc
 	$(CXX) $(CFLAGS) $(LDFLAGS) example/task1.cc -o task1
 task2: example/task2.cc

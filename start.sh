@@ -15,6 +15,9 @@ then
 elif [ $index == "2" ]
 then 
     make clean && make demo2
+elif [ $index == "3" ]
+then
+    make clean && make demo3
 else
     echo "未知的选择!"
 fi
