@@ -19,7 +19,7 @@ LDFLAGS = $(INCLUDE) $(LIB) -Wl,-rpath=$(shell pwd)/bin
 FUZZER = -fsanitize=fuzzer#,address
 endif
 
-all: demo
+all: debug_x86
 vuln: vuln.cc # 警告，重新编译会导致测试目标代码段偏移，导致example演示失败
 	$(CXX) vuln.cc -shared -fPIC -o vuln.so 
 #demo-unicorn: demo-unicorn.cc
@@ -32,9 +32,10 @@ task2: example/task2.cc
 	$(CXX) $(CFLAGS) $(LDFLAGS) example/task2.cc -o task2 
 fuzzer-unicorn: example/fuzzer-unicorn.cc
 	$(CXX) $(CFLAGS) $(LDFLAGS) $(FUZZER) example/fuzzer-unicorn.cc -o fuzzer-unicorn
-
+debug_x86: debug/debug_x86.cc
+	$(CXX) $(CFLAGS) $(LDFLAGS) $(FUZZER) debug/debug_x86.cc -o debug_x86 -D __DEBUG__
 clean:
-	rm -rf *.o crash-* demo myfuzzer task1 task2 fuzzer-unicorn
+	rm -rf *.o crash-* demo myfuzzer task1 task2 fuzzer-unicorn debug_x86 
 #all: test
 #%: %.c
 #    $(CC) $(CFLAGS) $^ $(LDFLAGS) -o $@

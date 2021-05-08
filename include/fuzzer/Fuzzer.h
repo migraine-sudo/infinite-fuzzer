@@ -71,6 +71,30 @@ typedef enum uc_mode {
 } uc_mode;
 */
 
+//定义一些常量和类
+const string reg_amd64[]=
+{"rax","rbx","rcx","rdx","rsp","rbp","rsi","rdi","rip","r8","r9","r10","r11","r12","r13","r14","r15"};
+class AMD64{};class X86{};class MIPS{};
+
+
+//泛化/特化
+template<class T> void print_register()
+{
+    return ;
+}
+template<> void print_register<AMD64>()
+{
+    printf("AMD64\n");
+    return ;
+}
+template<> void print_register<X86>()
+{
+    printf("X86\n");
+    return ;
+}
+
+
+
 //初始化全局变量给hook函数
 uint64_t data_size;
 uint64_t data_addr;
@@ -78,6 +102,8 @@ uint64_t data_addr;
 __attribute__((section("__libfuzzer_extra_counters")))
 uint8_t Counters[PCS_N];
 
+//扩展用
+extern void hook_code_execute(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data);
 
 /**
 Fuzzer模块,需在LLVMFuzzerTestOneInput中声明/调用，用于生成一个模糊测试的基本对象。
@@ -117,7 +143,33 @@ public:
 
     static void hook_code(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data)
     {
-        //printf("HOOK_CODE: 0x%" PRIx64 ", 0x%x\n", addr, size);
+        hook_code_execute(uc,addr,size,user_data);
+#ifdef __DEBUG__
+        printf("HOOK_CODE: 0x%" PRIx64 ", 0x%x\n", addr, size);
+        
+        if(addr == 0x40113B)
+        {
+            print_register<AMD64>();
+            uint64_t rax,rbx,rcx,rdx,rsp,rbp,rsi,rdi,rip,r8,r9,r10,r11,r12,r13,r14,r15;
+            uc_reg_read(uc,UC_X86_REG_RAX,&rax);
+            uc_reg_read(uc,UC_X86_REG_RBX,&rbx);
+            uc_reg_read(uc,UC_X86_REG_RCX,&rcx);
+            uc_reg_read(uc,UC_X86_REG_RDX,&rdx);
+            uc_reg_read(uc,UC_X86_REG_RSP,&rsp);
+            uc_reg_read(uc,UC_X86_REG_RBP,&rbp);
+            uc_reg_read(uc,UC_X86_REG_RSI,&rsi);
+            uc_reg_read(uc,UC_X86_REG_RDI,&rdi);
+            uc_reg_read(uc,UC_X86_REG_RIP,&rip);
+            uc_reg_read(uc,UC_X86_REG_R8,&r8);
+            uc_reg_read(uc,UC_X86_REG_R9,&r9);
+            cout << "================== Registers ====================="<< endl;
+            cout << "$rax = " << rax  << " \t$rbx = " << rbx << " \t$rcx = " << rcx << endl;
+            cout << "$rdx = " << rdx  << " \t$rsp = " << rsp << " \t$rbp = " << rbp << endl;
+            cout << "$rsi = " << rsi  << " \t$rdi = " << rdi << " \t$rip = " << rip << endl;
+            cout << "=================================================="<<endl;
+            //sleep(10);
+        }
+#endif
         uint32_t canary;
         uc_mem_read(uc,data_addr+data_size, &canary, 4);
 
@@ -138,13 +190,14 @@ public:
     void entrance(void* data,size_t size);    // 设置函数 入口和结束地址
     template <class ...Args>
     void start(Args... args);                 //  开始fuzz
+    void sleep();
 
 
 protected:
 
     bool load_target();         //  载入目标到内存(bin_buffer)中
     bool map_target();          //  映射bin_buffer内容到内存中
-
+    //template<class T> void print_register();
 
 private:
 
@@ -233,6 +286,9 @@ void Fuzzer::entrance(void* data,size_t size)
    data_size = size;
    data_addr = rt->data();
 }
+
+
+
 
 
 #endif

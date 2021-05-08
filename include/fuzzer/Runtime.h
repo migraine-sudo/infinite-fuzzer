@@ -17,8 +17,11 @@ public:
     uint64_t start() const {return start_;}
     uint64_t end() const {return end_;}
     uint64_t base() const {return base_;}
+    uint64_t stack_add(uint64_t i) {stack_size_+=i;return 0;}
+    uint64_t stack_red(uint64_t i) {stack_size_-=i;return 0;}
     uint64_t stack() const {return stack_;}
     uint64_t stack_size() const {return stack_size_;}
+    //uint64_t stack_top() const {return stack_+stack_size_-1;}
     uint64_t stack_top() const {return stack_+stack_size_-1;}
     uint64_t data() const {return data_;}
     void start(uint64_t addr) {start_ = addr ;}
