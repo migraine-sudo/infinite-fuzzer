@@ -121,20 +121,20 @@ public:
 
     static void hook_code(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data)
     {
-        hook_code_execute(uc,addr,size,user_data);
+        uint32_t canary;
+
 #ifdef __DEBUG__
         printf("HOOK_CODE: 0x%" PRIx64 ", 0x%x\n", addr, size);
-        
-        if(addr != 0x40113B)
+        if(addr == 0x40113B)
         {
             register_display<AMD64>(uc);
             stack_display<AMD64>(uc);
-            //sleep(10);
+            sleep(2);
         }
 #endif
-        uint32_t canary;
+    
+        hook_code_execute(uc,addr,size,user_data);
         uc_mem_read(uc,data_addr+data_size, &canary, 4);
-
         if(canary!=CANARY)      //0xFFFFFFFF
         {
             fprintf(stderr, "========= ERROR:InfiniteSanitizer: stack overflow on address 0x%lx at pc 0x%lx bp  sp  \n",(data_addr+data_size),addr);
@@ -155,7 +155,7 @@ public:
     //还提供一个自定义的参数入口
     //void 写入数据到某个寄存器或者push入栈中
     
-    void sleep();
+    //void sleep();
 
 
 protected:
