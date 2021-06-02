@@ -77,7 +77,7 @@ uint64_t data_addr;
 
 __attribute__((section("__libfuzzer_extra_counters")))
 uint8_t Counters[PCS_N];
-
+uint16_t prevPR = 0;
 
 /**
 Fuzzer模块,需在LLVMFuzzerTestOneInput中声明/调用，用于生成一个模糊测试的基本对象。
@@ -134,7 +134,11 @@ public:
     static void hook_block(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data)
     {
         //printf("HOOK_BLOCK: 0x%" PRIx64 ", 0x%x\n", addr, size);
-        Counters[addr]++;
+        //Counters[addr]++;
+        uint16_t pr = addr;
+        uint16_t idx = pr ^ prevPR;
+        Counters[idx]++;
+        prevPR = (pr >> 1);
     }
 
 
