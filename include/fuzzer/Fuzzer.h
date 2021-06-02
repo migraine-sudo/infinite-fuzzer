@@ -79,6 +79,7 @@ uint64_t data_addr;
 
 __attribute__((section("__libfuzzer_extra_counters")))
 uint8_t Counters[PCS_N];
+uint16_t  prevPR = 0;
 
 //扩展用,为使用者对代码块进行自定义提供接口
 extern void hook_code_execute(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data);
@@ -145,7 +146,11 @@ public:
     static void hook_block(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data)
     {
         //printf("HOOK_BLOCK: 0x%" PRIx64 ", 0x%x\n", addr, size);
-        Counters[addr]++;
+        //Counters[addr]++;
+        uint16_t pr = addr;
+        uint16_t idx = pr ^ prevPR;
+        Counters[idx]++;
+        prevPR = (pr >> 1);
     }
 
 
