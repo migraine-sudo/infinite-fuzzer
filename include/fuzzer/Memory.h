@@ -18,10 +18,17 @@ using namespace std;
 class Memory
 {
 public:
+    /*
     static Memory& getInstance()
     {
         static Memory instance_;
         return instance_;
+    }
+    */
+    Memory(){}
+    Memory(uc_engine *uc,uc_arch arch,uc_mode mode,Runtime *rt)
+    {
+        this->set_env(uc,arch,mode,rt);
     }
     // 请务必在调用任何Memory类中方法前调用这个函数来设置架构和模式
     void set_env(uc_engine *uc,uc_arch arch,uc_mode mode,Runtime *rt)
@@ -61,8 +68,8 @@ private:
     bool inited = false;    //是否使用set_env初始化
     uint64_t arg_num = 0;   //当前函数参数个数（记得每次运行前重置）
     bool not_push_0 = true; //是否push ret值
-private:
-    Memory(){}
+//private:
+    //Memory(){}
     //Memory(uc_engine *uc,uc_arch arch,uc_mode mode):uc_(uc),arch_(arch),mode_(mode)
     
 };

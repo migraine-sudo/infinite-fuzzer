@@ -10,3 +10,8 @@ extern "C" int LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {
 
     return 0;
 }
+// 自定义hook相关函数
+void hook_code_execute(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data)
+{
+    return;
+}

@@ -6,6 +6,7 @@
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include <vector>
 
 #include <unicorn/unicorn.h>
 
@@ -99,20 +100,30 @@ public:
     // 构造函数初始化
     Fuzzer(string target, uint64_t start, uint64_t end, uc_arch arch, uc_mode mode):target(target){
         
-        //初始化 运行时 和 内存映射 对象
-        mem = &Memory::getInstance();
-        rt = new Runtime(start,end);
-
-        //载入目标 初始化Unicorn对象
-        load_target();
+        //初始化Unicorn  运行时 和 内存映射 对象对象
         uc_open(arch, mode, &(this->uc));
+        rt = new Runtime(start,end);
+        mem = new Memory(uc,UC_ARCH_X86, UC_MODE_64,rt);
         
-        mem->set_env(uc,UC_ARCH_X86, UC_MODE_64,rt);
+        //载入并且映射目标
+        load_target();
         if(!mem->mem_map(rt->base(),(size_t)target_size,UC_PROT_ALL))
             //cout << "Error : Please init the Memory before fuzzing!" << endl;
             abort();
+        map_target();
+
         }
 
+    Fuzzer(Fuzzer const& fuzzer){
+        cout << "Do not copy this member,or you will get one UAF..." << endl;
+    }
+
+    /*
+    Fuzzer operator = (Fuzzer fuzzer){
+       //cout << "Do not copy this member,or you will get one UAF..." << endl; 
+       //return new Fuzzer(); 
+    }
+    */
     ~Fuzzer(){
         delete[] bin_buffer; 
         uc_close(uc);
@@ -178,6 +189,7 @@ private:
     char* bin_buffer;
     uc_engine *uc;
     uc_err err;
+    vector<uint64_t> skip_address;
 };
 
 
@@ -187,8 +199,6 @@ private:
 template <class ...Args>
 void Fuzzer::start(Args... args)    
 {
-    //映射内存和初始化寄存器
-    map_target();
 
     //写入对应参数
     mem->set_args(args...);
@@ -240,7 +250,7 @@ inline bool Fuzzer::load_target()
 
 //  映射bin_buffer内容到内存中
 
-bool Fuzzer::map_target()
+inline bool Fuzzer::map_target()
 {
     mem->mem_map(this->rt->base(), 2 * 1024 * 1024, UC_PROT_ALL);
     mem->mem_write(this->rt->base(), bin_buffer, target_size - 1);
