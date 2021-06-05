@@ -82,8 +82,10 @@ __attribute__((section("__libfuzzer_extra_counters")))
 uint8_t Counters[PCS_N];
 uint16_t  prevPR = 0;
 
+vector<uint64_t> skip_addr;
+
 //扩展用,为使用者对代码块进行自定义提供接口
-extern void hook_code_execute(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data);
+//extern void hook_code_execute(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data);
 
 /**
 Fuzzer模块,需在LLVMFuzzerTestOneInput中声明/调用，用于生成一个模糊测试的基本对象。
@@ -102,7 +104,11 @@ public:
         
         //初始化Unicorn  运行时 和 内存映射 对象对象
         uc_open(arch, mode, &(this->uc));
-        rt = new Runtime(start,end);
+        rt = new Runtime();
+        if(start < rt->base() || end < rt->base() ){
+            rt->start(start + rt->base());
+            rt->end(end + rt->base());
+        }
         mem = new Memory(uc,UC_ARCH_X86, UC_MODE_64,rt);
         
         //载入并且映射目标
@@ -145,13 +151,23 @@ public:
         }
 #endif
     
-        hook_code_execute(uc,addr,size,user_data);
+        //hook_code_execute(uc,addr,size,user_data);
         uc_mem_read(uc,data_addr+data_size, &canary, 4);
         if(canary!=CANARY)      //0xFFFFFFFF
         {
             fprintf(stderr, "========= ERROR:InfiniteSanitizer: stack overflow on address 0x%lx at pc 0x%lx bp  sp  \n",(data_addr+data_size),addr);
             abort();
         }
+        for(auto address:skip_addr)
+        {
+            if( address == addr )
+            {
+                long r_rip = addr + size ;
+                uc_reg_write(uc, UC_X86_REG_RIP, &r_rip); 
+            }
+        }
+        
+
     }
 
     static void hook_block(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data)
@@ -170,7 +186,12 @@ public:
     void start(Args... args);                 //  开始fuzz,提供一个可变参数的入口
     //还提供一个自定义的参数入口
     //void 写入数据到某个寄存器或者push入栈中
-    
+
+    //template <class T,class ...Args>
+    //void skip(T head,Args... args);
+    template<class ...Args>
+    void skip(uint64_t head,Args...args);
+    void skip();
     //void sleep();
 
 
@@ -214,6 +235,18 @@ void Fuzzer::start(Args... args)
         err, uc_strerror(err));
         abort();
     }
+}
+
+template<class ...Args>
+void Fuzzer::skip(uint64_t head,Args...args)
+{
+    (this->skip_address).push_back(head);
+    skip(args...); 
+}
+void Fuzzer::skip()
+{
+    skip_addr.insert(skip_addr.end(),this->skip_address.begin(),this->skip_address.end());
+    return ;
 }
 
 

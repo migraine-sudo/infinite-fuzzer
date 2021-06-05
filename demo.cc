@@ -3,15 +3,12 @@
 extern "C" int LLVMFuzzerTestOneInput(uint8_t *data, size_t size) {
 
     //VulnerableFunctionx(data,size,data);
-
-    Fuzzer fuzzer("vuln.so",0x401100,0x40117C,UC_ARCH_X86, UC_MODE_64); //参数意义：fuzz目标、函数入口地址、函数出口地址、处理器架构、运行模式
+    //注：函数的入口地址可以通过objdump -S来查找
+    //Fuzzer fuzzer("vuln.so",0x401100,0x40117C,UC_ARCH_X86, UC_MODE_64); //参数意义：fuzz目标、函数入口地址、函数出口地址、处理器架构、运行模式
+    Fuzzer fuzzer("vuln.so",0x1180,0x125C,UC_ARCH_X86, UC_MODE_64); //参数意义：fuzz目标、函数入口地址、函数出口地址、处理器架构、运行模式
+    //Fuzzer fuzzer("vuln.so",0x1100,0x117C,UC_ARCH_X86, UC_MODE_64); //参数意义：fuzz目标、函数入口地址、函数出口地址、处理器架构、运行模式
     fuzzer.entrance(data,size);     //  void* data,size_t size
     fuzzer.start(DATA,size,DATA);   //  输入函数对应参数
 
     return 0;
-}
-// 自定义hook相关函数
-void hook_code_execute(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data)
-{
-    return;
 }

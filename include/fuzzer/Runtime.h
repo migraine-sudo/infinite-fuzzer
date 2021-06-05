@@ -11,6 +11,8 @@
 class Runtime
 {
 public:
+    Runtime(){}
+    Runtime(uint64_t base):base_(base){}
     Runtime(uint64_t start, uint64_t end):start_(start),end_(end){}
     Runtime(uint64_t start, uint64_t end, uint64_t base ):start_(start),end_(end),base_(base){}
     Runtime(uint64_t start, uint64_t end, uint64_t base , uint64_t data):start_(start),end_(end),data_(data){}

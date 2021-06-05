@@ -19,7 +19,7 @@ LDFLAGS = $(INCLUDE) $(LIB) -Wl,-rpath=$(shell pwd)/bin
 FUZZER = -fsanitize=fuzzer#,address
 endif
 
-all: amd64_arg_check 
+all: amd64_arg_check demo 
 vuln: vuln.cc # 警告，重新编译会导致测试目标代码段偏移，导致example演示失败
 	$(CXX) vuln.cc -shared -fPIC -o vuln.so 
 #demo-unicorn: demo-unicorn.cc
