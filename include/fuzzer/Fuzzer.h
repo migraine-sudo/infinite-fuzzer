@@ -139,21 +139,15 @@ public:
         
         //初始化Unicorn  运行时 和 内存映射 对象对象
         uc_open(arch, mode, &(this->uc));
-        rt = new Runtime();
-        if(start < rt->base() || end < rt->base() ){
-            rt->start(start + rt->base());
-            rt->end(end + rt->base());
-        }
-        else{
-            rt->start(start);
-            rt->end(end);
-        }
-        mem = new Memory(uc,UC_ARCH_X86, UC_MODE_64,rt);
+        if(start < Runtime().base() || end < Runtime().base() )
+            rt = new Runtime(start + Runtime().base(),end + Runtime().base());
+        else
+            rt = new Runtime(start,end);
+        mem = new Memory(uc,arch, mode,rt);
         
         //载入并且映射目标
         load_target();
         if(!mem->mem_map(rt->base(),(size_t)target_size,UC_PROT_ALL))
-            //cout << "Error : Please init the Memory before fuzzing!" << endl;
             abort();
         map_target();
 
@@ -174,7 +168,7 @@ public:
         uc_close(uc);
         }
 
-
+    // crc16
     static uint16_t crc16(uint32_t value) {
         int counter;
         uint16_t crc = 0;
@@ -201,7 +195,6 @@ public:
         }
 #endif
     
-        //hook_code_execute(uc,addr,size,user_data);
         uc_mem_read(uc,data_addr+data_size, &canary, 4);
         if(canary!=CANARY)      //0xFFFFFFFF
         {
@@ -217,7 +210,6 @@ public:
             }
         }
         
-
     }
 
     static void hook_block(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data)
