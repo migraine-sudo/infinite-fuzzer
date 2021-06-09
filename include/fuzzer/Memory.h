@@ -18,10 +18,17 @@ using namespace std;
 class Memory
 {
 public:
+    /*
     static Memory& getInstance()
     {
         static Memory instance_;
         return instance_;
+    }
+    */
+    Memory(){}
+    Memory(uc_engine *uc,uc_arch arch,uc_mode mode,Runtime *rt)
+    {
+        this->set_env(uc,arch,mode,rt);
     }
     // 请务必在调用任何Memory类中方法前调用这个函数来设置架构和模式
     void set_env(uc_engine *uc,uc_arch arch,uc_mode mode,Runtime *rt)
@@ -48,6 +55,9 @@ public:
     bool set_args(T head,Args... args);
     bool set_args();
 
+    // 虚拟机的指令操作模拟
+    bool push(uint64_t data);
+
 private:
     Runtime *rt_;   //Runtime对象
     uc_engine *uc_; //Unicorn对象
@@ -57,8 +67,9 @@ private:
 
     bool inited = false;    //是否使用set_env初始化
     uint64_t arg_num = 0;   //当前函数参数个数（记得每次运行前重置）
-private:
-    Memory(){}
+    bool not_push_0 = true; //是否push ret值
+//private:
+    //Memory(){}
     //Memory(uc_engine *uc,uc_arch arch,uc_mode mode):uc_(uc),arch_(arch),mode_(mode)
     
 };
@@ -87,7 +98,7 @@ bool Memory::init_reg(void* data,size_t size)
 
                 //初始化 栈空间 和 测试数据data的空间
                 uint64_t r_rsp = this->rt_->stack_top();
-                this->mem_map(this->rt_->stack(), this->rt_->stack_size() , UC_PROT_ALL);
+                this->mem_map(this->rt_->stack(), (this->rt_->stack_size())+0x1000, UC_PROT_ALL);
                 this->reg_write(UC_X86_REG_RSP, &r_rsp);
 
                 this->mem_map(this->rt_->data(), size , UC_PROT_ALL);
@@ -158,8 +169,12 @@ bool Memory::insert_arg(uint64_t arg)
                     }
                     default:
                     {
-                        cout << "Error in insert arg, too many args ! " << endl;
-                        return false;
+                        //if(not_push_0)      //首先push ret地址为0x0
+                        //    this->push(0);
+                        //not_push_0 = false;
+                        this->push(reg);
+                        //cout << "Error in insert arg, too many args ! " << endl;
+                        //return false;
                         break;
                     }
                        
@@ -188,7 +203,7 @@ bool Memory::insert_arg(uint64_t arg)
 
     return true;
 }
-
+// 递归解析多参数包
 template<class T,class ...Args>
 bool Memory::set_args(T head,Args... args)
 {
@@ -201,7 +216,7 @@ bool Memory::set_args(T head,Args... args)
     //cout << " head = " << head << endl;
     return this->set_args(args...);
 }
-
+// 递归出口
 bool Memory::set_args()
 {
     //cout << "empty" << endl; // 递归出口
@@ -209,6 +224,29 @@ bool Memory::set_args()
 }
 
 
+///////////////////
+// 实现入栈出栈操作//
+//////////////////
+bool Memory::push(uint64_t data)
+{
+    if(this->arch_ == UC_ARCH_X86)
+    {
+        if(this->mode_ == UC_MODE_64)
+        {
+            //mem_write(rt_->stack_top() ,&data ,8);
+#ifdef __DEBUG__
+            cout << "stack_top =" << rt_->stack_top() << "  "<< "stack_size = " <<rt_->stack_size() <<endl;
+#endif
+            rt_->stack_red(8); //64位一次可处理8字节
+            mem_write(rt_->stack_top() ,&data ,8);
+#ifdef __DEBUG__
+            cout << "stack_top =" << rt_->stack_top() << "  "<< "stack_size = " <<rt_->stack_size() <<endl;
+#endif
+            return true;
+        }
+    }
+    return false;
+}
 
 
 

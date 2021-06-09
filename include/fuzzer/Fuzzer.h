@@ -6,78 +6,18 @@
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include <vector>
 
 #include <unicorn/unicorn.h>
 
 #include "Runtime.h"
 #include "Memory.h"
+#include "Debug.h"
+#include "Utils.h"
 
-#define PCS_N (1 << 12)
 
 using namespace std;
-
-/* Unicorn
-typedef enum uc_arch {
-    UC_ARCH_ARM = 1,    // ARM 架构 (包括 Thumb, Thumb-2)
-    UC_ARCH_ARM64,      // ARM-64, 也称 AArch64
-    UC_ARCH_MIPS,       // Mips 架构
-    UC_ARCH_X86,        // X86 架构 (包括 x86 & x86-64)
-    UC_ARCH_PPC,        // PowerPC 架构 (暂不支持)
-    UC_ARCH_SPARC,      // Sparc 架构
-    UC_ARCH_M68K,       // M68K 架构
-    UC_ARCH_MAX,
-} uc_arch;
-*/
-
-/*
-typedef enum uc_mode {
-    UC_MODE_LITTLE_ENDIAN = 0,    // 小端序模式 (默认)
-    UC_MODE_BIG_ENDIAN = 1 << 30, // 大端序模式
-
-    // arm / arm64
-    UC_MODE_ARM = 0,              // ARM 模式
-    UC_MODE_THUMB = 1 << 4,       // THUMB 模式 (包括 Thumb-2)
-    UC_MODE_MCLASS = 1 << 5,      // ARM's Cortex-M 系列 (暂不支持)
-    UC_MODE_V8 = 1 << 6,          // ARMv8 A32 encodings for ARM (暂不支持)
-
-    // arm (32bit) cpu 类型
-    UC_MODE_ARM926 = 1 << 7,	  // ARM926 CPU 类型
-    UC_MODE_ARM946 = 1 << 8,	  // ARM946 CPU 类型
-    UC_MODE_ARM1176 = 1 << 9,	  // ARM1176 CPU 类型
-
-    // mips
-    UC_MODE_MICRO = 1 << 4,       // MicroMips 模式 (暂不支持)
-    UC_MODE_MIPS3 = 1 << 5,       // Mips III ISA (暂不支持)
-    UC_MODE_MIPS32R6 = 1 << 6,    // Mips32r6 ISA (暂不支持)
-    UC_MODE_MIPS32 = 1 << 2,      // Mips32 ISA
-    UC_MODE_MIPS64 = 1 << 3,      // Mips64 ISA
-
-    // x86 / x64
-    UC_MODE_16 = 1 << 1,          // 16-bit 模式
-    UC_MODE_32 = 1 << 2,          // 32-bit 模式
-    UC_MODE_64 = 1 << 3,          // 64-bit 模式
-
-    // ppc 
-    UC_MODE_PPC32 = 1 << 2,       // 32-bit 模式 (暂不支持)
-    UC_MODE_PPC64 = 1 << 3,       // 64-bit 模式 (暂不支持)
-    UC_MODE_QPX = 1 << 4,         // Quad Processing eXtensions 模式 (暂不支持)
-
-    // sparc
-    UC_MODE_SPARC32 = 1 << 2,     // 32-bit 模式
-    UC_MODE_SPARC64 = 1 << 3,     // 64-bit 模式
-    UC_MODE_V9 = 1 << 4,          // SparcV9 模式 (暂不支持)
-
-    // m68k
-} uc_mode;
-*/
-
-//初始化全局变量给hook函数
-uint64_t data_size;
-uint64_t data_addr;
-
-__attribute__((section("__libfuzzer_extra_counters")))
-uint8_t Counters[PCS_N];
-
+using namespace Utils;
 
 /**
 Fuzzer模块,需在LLVMFuzzerTestOneInput中声明/调用，用于生成一个模糊测试的基本对象。
@@ -94,57 +34,54 @@ public:
     // 构造函数初始化
     Fuzzer(string target, uint64_t start, uint64_t end, uc_arch arch, uc_mode mode):target(target){
         
-        //初始化 运行时 和 内存映射 对象
-        mem = &Memory::getInstance();
-        rt = new Runtime(start,end);
-
-        //载入目标 初始化Unicorn对象
-        load_target();
+        //初始化Unicorn  运行时 和 内存映射 对象对象
         uc_open(arch, mode, &(this->uc));
+        if(start < Runtime().base() || end < Runtime().base() )
+            rt = new Runtime(start + Runtime().base(),end + Runtime().base());
+        else
+            rt = new Runtime(start,end);
+        mem = new Memory(uc,arch, mode,rt);
         
-        mem->set_env(uc,UC_ARCH_X86, UC_MODE_64,rt);
+        //载入并且映射目标
+        load_target();
         if(!mem->mem_map(rt->base(),(size_t)target_size,UC_PROT_ALL))
-            //cout << "Error : Please init the Memory before fuzzing!" << endl;
             abort();
+        map_target();
+
         }
 
+    Fuzzer(Fuzzer const& fuzzer){
+        cout << "Do not copy this member,or you will get one UAF..." << endl;
+    }
+
+    /*
+    Fuzzer operator = (Fuzzer fuzzer){
+       //cout << "Do not copy this member,or you will get one UAF..." << endl; 
+       //return new Fuzzer(); 
+    }
+    */
     ~Fuzzer(){
         delete[] bin_buffer; 
         uc_close(uc);
         }
 
-    // 钩子函数 用于检测函数是否存在栈溢出
-
-    static void hook_code(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data)
-    {
-        //printf("HOOK_CODE: 0x%" PRIx64 ", 0x%x\n", addr, size);
-        uint32_t canary;
-        uc_mem_read(uc,data_addr+data_size, &canary, 4);
-
-        if(canary!=CANARY)      //0xFFFFFFFF
-        {
-            fprintf(stderr, "========= ERROR:InfiniteSanitizer: stack overflow on address 0x%lx at pc 0x%lx bp  sp  \n",(data_addr+data_size),addr);
-            abort();
-        }
-    }
-
-    static void hook_block(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data)
-    {
-        //printf("HOOK_BLOCK: 0x%" PRIx64 ", 0x%x\n", addr, size);
-        Counters[addr]++;
-    }
-
-
-    void entrance(void* data,size_t size);    // 设置函数 入口和结束地址
+    void entrance(void* data,size_t size);    // 设置函数 入口和结束地址。这部分之后需要内置一下，不需要用户调用。
     template <class ...Args>
-    void start(Args... args);                 //  开始fuzz
+    void start(Args... args);                 // 开始fuzz,会根据不同架构和模式自动将参数写入模拟执行的函数
+    //还需要提供一个自定义的参数入口
+    //void 写入数据到某个寄存器或者push入栈中
 
+    template<class ...Args>
+    void skip(uint64_t head,Args...args);      // 设定一些需要跳过的地址
+    void skip();
+    void add_hook(hook_type type,void (*hook_ext)       // 载入用户自定义的hook函数
+    (uc_engine* uc, uint64_t addr, uint32_t size, void* user_data));                         
 
 protected:
 
     bool load_target();         //  载入目标到内存(bin_buffer)中
     bool map_target();          //  映射bin_buffer内容到内存中
-
+    //template<class T> void print_register();
 
 private:
 
@@ -155,6 +92,7 @@ private:
     char* bin_buffer;
     uc_engine *uc;
     uc_err err;
+    vector<uint64_t> skip_address;
 };
 
 
@@ -164,9 +102,6 @@ private:
 template <class ...Args>
 void Fuzzer::start(Args... args)    
 {
-    //映射内存和初始化寄存器
-    map_target();
-
     //写入对应参数
     mem->set_args(args...);
 
@@ -183,6 +118,26 @@ void Fuzzer::start(Args... args)
     }
 }
 
+template<class ...Args>
+void Fuzzer::skip(uint64_t head,Args...args)
+{
+    (this->skip_address).push_back(head);
+    skip(args...); 
+}
+void Fuzzer::skip()
+{
+    skip_addr.insert(skip_addr.end(),this->skip_address.begin(),this->skip_address.end());
+    return ;
+}
+
+void Fuzzer::add_hook(hook_type type,void (*hook_ext)(uc_engine* uc, uint64_t addr, uint32_t size, void* user_data))                         // 增加hook函数
+{
+    if(type==CODE)
+        hook_code_ext = hook_ext;
+    if(type==BLOCK)
+        hook_block_ext = hook_ext;
+    //...
+}
 
 // 载入整个目标文件到内存中
 
@@ -217,7 +172,7 @@ inline bool Fuzzer::load_target()
 
 //  映射bin_buffer内容到内存中
 
-bool Fuzzer::map_target()
+inline bool Fuzzer::map_target()
 {
     mem->mem_map(this->rt->base(), 2 * 1024 * 1024, UC_PROT_ALL);
     mem->mem_write(this->rt->base(), bin_buffer, target_size - 1);
