@@ -5,26 +5,23 @@
 
 #include <unicorn/unicorn.h>
 
+#include "traits.h"
+
 #define DATA 65537
 #define CANARY 0xFFFFFFFF
 using namespace std;
 
 /**
- Memory 是一个单例模式，即一次fuzz只能实例化一个对象。
+ Memory 
     1.封装了Unicorn提供的内存操作相关API(参考https://github.com/unicorn-engine/unicorn/blob/master/docs/Micro%20Unicorn-Engine%20API%20Documentation/Micro%20Unicorn-Engine%20API%20Documentation.md)
     2.对不同架构不同模式分别提供参数在内存上的初始化（比如X64通过栈传递参数）
 */
 
 class Memory
 {
+protected:
+typedef Runtime* Runtime_pointer;
 public:
-    /*
-    static Memory& getInstance()
-    {
-        static Memory instance_;
-        return instance_;
-    }
-    */
     Memory(){}
     Memory(uc_engine *uc,uc_arch arch,uc_mode mode,Runtime *rt)
     {
@@ -50,7 +47,9 @@ public:
 
     // 实现寄存器初始化 以及 参数传递
     bool init_reg(void* data,size_t size);
-    bool insert_arg(uint64_t data);
+    template<class T>
+    bool insert_arg(T arg);
+    //bool insert_arg(uint64_t data);
     template<class T,class ...Args>
     bool set_args(T head,Args... args);
     bool set_args();
@@ -59,7 +58,7 @@ public:
     bool push(uint64_t data);
 
 private:
-    Runtime *rt_;   //Runtime对象
+    Runtime_pointer rt_;   //Runtime对象
     uc_engine *uc_; //Unicorn对象
     uc_err err_;    //Unicorn错误类型
     uc_arch arch_;  //Unicorn对象架构
@@ -123,7 +122,8 @@ bool Memory::init_reg(void* data,size_t size)
 }
 
 // 根据不同架构的 调用约定 传递参数
-bool Memory::insert_arg(uint64_t arg)
+template<class T>
+bool Memory::insert_arg(T arg)
 {
     switch(this->arch_){
     case UC_ARCH_X86:{
@@ -207,11 +207,11 @@ bool Memory::insert_arg(uint64_t arg)
 template<class T,class ...Args>
 bool Memory::set_args(T head,Args... args)
 {
+    static_assert(traits::is_insertable<T>::value,"Cannot insert value of this type!");
     if(head == (uint64_t)DATA)
-        this->insert_arg(DATA);
-
+        this->insert_arg<T>(DATA);
     else
-        this->insert_arg((uint64_t)head);
+        this->insert_arg<T>((uint64_t)head);
     
     //cout << " head = " << head << endl;
     return this->set_args(args...);
