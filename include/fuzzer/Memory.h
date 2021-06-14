@@ -24,7 +24,6 @@ protected:
 typedef Runtime* Runtime_pointer;
 typedef uint64_t count;
 typedef stack<uint64_t> long_stack;
-typedef stack<double> double_stack;
 public:
     Memory(){}
     Memory(uc_engine *uc,uc_arch arch,uc_mode mode,Runtime *rt)
@@ -71,7 +70,7 @@ private:
     //count arg_num = 0;      //当前函数参数个数（记得每次运行前重置）
     count intergal_point = 0;       //当前函数整型参数个数
     count float_point = 0;          //当前函数浮点数参数个数
-    long_stack stack_intergal;
+    long_stack stack_args;
     bool not_push_0 = true; //是否push ret值
 };
 
@@ -169,7 +168,7 @@ bool Memory::insert_arg(T arg)
                     default:
                     {
                         //this->push(reg);
-                        stack_intergal.push(reg);
+                        stack_args.push(reg);
                         break;
                     }
                        
@@ -221,7 +220,8 @@ bool Memory::insert_arg(T arg)
                     }
                     default:
                     {
-                        this->push(reg);
+                        //this->push(reg);
+                        stack_args.push(reg);
                         break;
                     }
                     }
@@ -266,8 +266,8 @@ bool Memory::set_args(T head,Args... args)
 bool Memory::set_args()
 {
     //cout << "empty" << endl; // 递归出口
-    if(intergal_point>6)
-        push_arg(stack_intergal);
+    if(intergal_point>6||float_point>8)
+        push_arg(stack_args);
         //this->insert_arg_stack
     return true;
 }
