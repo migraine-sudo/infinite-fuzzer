@@ -9,6 +9,19 @@ namespace traits{
 	{
 		static const bool value = std::is_integral<T>::value||std::is_floating_point<T>::value;
 	};
+	
+	/*
+	template<typename T>
+	struct is_size_T
+	{
+		static const bool value = false;
+	};
+	template<>
+	struct is_size_T<size_t>
+	{
+		static const bool value = true;
+	};
+	*/
 }
 
 

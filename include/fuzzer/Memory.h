@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include <unicorn/unicorn.h>
+#include <stack>
 
 #include "traits.h"
 
@@ -14,7 +15,7 @@ using namespace std;
 /**
  Memory 
     1.封装了Unicorn提供的内存操作相关API(参考https://github.com/unicorn-engine/unicorn/blob/master/docs/Micro%20Unicorn-Engine%20API%20Documentation/Micro%20Unicorn-Engine%20API%20Documentation.md)
-    2.对不同架构不同模式分别提供参数在内存上的初始化（比如X64通过栈传递参数）
+    2.对不同架构不同模式分别提供参数在内存上的初始化（比如X64通过栈传递参数）,即实现ABI兼容
 */
 
 class Memory
@@ -22,6 +23,8 @@ class Memory
 protected:
 typedef Runtime* Runtime_pointer;
 typedef uint64_t count;
+typedef stack<uint64_t> long_stack;
+typedef stack<double> double_stack;
 public:
     Memory(){}
     Memory(uc_engine *uc,uc_arch arch,uc_mode mode,Runtime *rt)
@@ -50,11 +53,10 @@ public:
     bool init_reg(void* data,size_t size);
     template<class T>
     bool insert_arg(T arg);
-    //bool insert_arg(uint64_t data);
     template<class T,class ...Args>
     bool set_args(T head,Args... args);
     bool set_args();
-
+    bool  push_arg(stack<uint64_t> stack);
     // 虚拟机的指令操作模拟
     bool push(uint64_t data);
 
@@ -69,11 +71,8 @@ private:
     //count arg_num = 0;      //当前函数参数个数（记得每次运行前重置）
     count intergal_point = 0;       //当前函数整型参数个数
     count float_point = 0;          //当前函数浮点数参数个数
+    long_stack stack_intergal;
     bool not_push_0 = true; //是否push ret值
-//private:
-    //Memory(){}
-    //Memory(uc_engine *uc,uc_arch arch,uc_mode mode):uc_(uc),arch_(arch),mode_(mode)
-    
 };
 
 
@@ -125,14 +124,15 @@ bool Memory::insert_arg(T arg)
     switch(this->arch_){
     case UC_ARCH_X86:{
         switch(this->mode_){
+            //System V AMD64 ABI
             case UC_MODE_64:
             {
                 uint64_t reg;
                 if(arg == DATA)  //参数为DATA 默认选择data(void *)作为参数
-                    reg =reinterpret_cast<uint64_t>(this->rt_->data()); 
+                    reg =reinterpret_cast<uint64_t>(this->rt_->data());
                 else
                     reg = arg;
-                // 依据x86架构64位的 函数调用约定 传递参数 : RDI RSI RDX RCX R8 R9
+                // 依据x86架构64位的 函数调用约定 传递参数 : RDI RSI RDX RCX R8 R9，之后“从右向左”入栈（这里需要注意）
                 if(std::is_integral<T>::value)
                 {
                 switch(this->intergal_point){
@@ -168,7 +168,8 @@ bool Memory::insert_arg(T arg)
                     }
                     default:
                     {
-                        this->push(reg);
+                        //this->push(reg);
+                        stack_intergal.push(reg);
                         break;
                     }
                        
@@ -177,7 +178,6 @@ bool Memory::insert_arg(T arg)
                 }
                 if(std::is_floating_point<T>::value)
                 {
-                    //UC_X86_REG_XMM0,
                     switch(this->float_point){
                     case 0:
                     {
@@ -266,14 +266,27 @@ bool Memory::set_args(T head,Args... args)
 bool Memory::set_args()
 {
     //cout << "empty" << endl; // 递归出口
+    if(intergal_point>6)
+        push_arg(stack_intergal);
+        //this->insert_arg_stack
     return true;
 }
 
+//将参数逆向入栈
+bool Memory::push_arg(long_stack stack)
+{
+    while(!stack.empty())
+    {
+        push(stack.top());
+        stack.pop();
+    }
+    return true;
+}
 
 ///////////////////
 // 实现入栈出栈操作//
 //////////////////
-bool Memory::push(uint64_t data)
+bool Memory::push(uint64_t data) //针对参数入栈
 {
     if(this->arch_ == UC_ARCH_X86)
     {
@@ -283,8 +296,13 @@ bool Memory::push(uint64_t data)
 #ifdef __DEBUG__
             cout << "stack_top =" << rt_->stack_top() << "  "<< "stack_size = " <<rt_->stack_size() <<endl;
 #endif
-            rt_->stack_red(8); //64位一次可处理8字节
-            mem_write(rt_->stack_top() ,&data ,8);
+            uint64_t r_rsp;
+            reg_read( UC_X86_REG_RSP, &r_rsp);
+            //rt_->stack_red(8); //64位一次可处理8字节
+            r_rsp-=8;
+            //mem_write(rt_->stack_top() ,&data ,8);
+            mem_write( r_rsp + 0x8 ,&data ,8);
+            reg_write( UC_X86_REG_RSP, &r_rsp);  
 #ifdef __DEBUG__
             cout << "stack_top =" << rt_->stack_top() << "  "<< "stack_size = " <<rt_->stack_size() <<endl;
 #endif
