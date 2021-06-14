@@ -21,6 +21,7 @@ class Memory
 {
 protected:
 typedef Runtime* Runtime_pointer;
+typedef uint64_t count;
 public:
     Memory(){}
     Memory(uc_engine *uc,uc_arch arch,uc_mode mode,Runtime *rt)
@@ -65,7 +66,9 @@ private:
     uc_mode mode_;  //Unicorn对象运行模式
 
     bool inited = false;    //是否使用set_env初始化
-    uint64_t arg_num = 0;   //当前函数参数个数（记得每次运行前重置）
+    //count arg_num = 0;      //当前函数参数个数（记得每次运行前重置）
+    count intergal_point = 0;       //当前函数整型参数个数
+    count float_point = 0;          //当前函数浮点数参数个数
     bool not_push_0 = true; //是否push ret值
 //private:
     //Memory(){}
@@ -78,23 +81,14 @@ private:
 
 bool Memory::init_reg(void* data,size_t size)
 {
-    arg_num=0; 
+    //arg_num=0; 
+    intergal_point = 0;
+    float_point =0 ;
     switch(this->arch_){
     case UC_ARCH_X86:{
         switch(this->mode_){
             case UC_MODE_64:
             {
-                /*
-                uint64_t r_rdi = reinterpret_cast<uint64_t>(this->rt_->data());
-                uint64_t r_rdx = reinterpret_cast<uint64_t>(this->rt_->data());
-                uint64_t r_rsi = size;
-                this->mem_map(this->rt_->data(), size , UC_PROT_ALL);
-                this->mem_write(this->rt_->data() , data, size - 1);
-                this->reg_write( UC_X86_REG_RDI, &r_rdi);
-                this->reg_write( UC_X86_REG_RSI, &r_rsi);
-                //this->reg_write( UC_X86_REG_RDX, &r_rdx);
-                */
-
                 //初始化 栈空间 和 测试数据data的空间
                 uint64_t r_rsp = this->rt_->stack_top();
                 this->mem_map(this->rt_->stack(), (this->rt_->stack_size())+0x1000, UC_PROT_ALL);
@@ -109,7 +103,10 @@ bool Memory::init_reg(void* data,size_t size)
 
                 break;
             }
-            case UC_MODE_32: break;
+            case UC_MODE_32: 
+            {
+                break;
+            }
             default:return false;
         }
     }
@@ -121,7 +118,7 @@ bool Memory::init_reg(void* data,size_t size)
     return true;
 }
 
-// 根据不同架构的 调用约定 传递参数
+// 根据不同架构的 调用约定 传递参数,实现二进制兼容(ABI)
 template<class T>
 bool Memory::insert_arg(T arg)
 {
@@ -136,7 +133,9 @@ bool Memory::insert_arg(T arg)
                 else
                     reg = arg;
                 // 依据x86架构64位的 函数调用约定 传递参数 : RDI RSI RDX RCX R8 R9
-                switch(this->arg_num){
+                if(std::is_integral<T>::value)
+                {
+                switch(this->intergal_point){
                     case 0:
                     {
                         this->reg_write( UC_X86_REG_RDI, &reg); 
@@ -169,15 +168,64 @@ bool Memory::insert_arg(T arg)
                     }
                     default:
                     {
-                        //if(not_push_0)      //首先push ret地址为0x0
-                        //    this->push(0);
-                        //not_push_0 = false;
                         this->push(reg);
-                        //cout << "Error in insert arg, too many args ! " << endl;
-                        //return false;
                         break;
                     }
                        
+                }
+                this->intergal_point++;
+                }
+                if(std::is_floating_point<T>::value)
+                {
+                    //UC_X86_REG_XMM0,
+                    switch(this->float_point){
+                    case 0:
+                    {
+                        this->reg_write( UC_X86_REG_XMM0, &reg); 
+                        break;
+                    }
+                    case 1:
+                    {
+                       this->reg_write( UC_X86_REG_XMM1, &reg); 
+                       break;
+                    }
+                    case 2:
+                    {
+                       this->reg_write( UC_X86_REG_XMM2, &reg); 
+                       break;
+                    }
+                    case 3:
+                    {
+                       this->reg_write( UC_X86_REG_XMM3, &reg); 
+                       break;
+                    }
+                    case 4:
+                    {
+                       this->reg_write( UC_X86_REG_XMM4, &reg); 
+                       break;
+                    }
+                    case 5:
+                    {
+                       this->reg_write( UC_X86_REG_XMM5, &reg); 
+                       break;
+                    }
+                    case 6:
+                    {
+                       this->reg_write( UC_X86_REG_XMM6, &reg); 
+                       break;
+                    }
+                    case 7:
+                    {
+                       this->reg_write( UC_X86_REG_XMM7, &reg); 
+                       break;
+                    }
+                    default:
+                    {
+                        this->push(reg);
+                        break;
+                    }
+                    }
+                    this->float_point++;
                 }
                 break;
             }
@@ -199,8 +247,6 @@ bool Memory::insert_arg(T arg)
     }
         
     }
-    this->arg_num++;
-
     return true;
 }
 // 递归解析多参数包
@@ -211,7 +257,7 @@ bool Memory::set_args(T head,Args... args)
     if(head == (uint64_t)DATA)
         this->insert_arg<T>(DATA);
     else
-        this->insert_arg<T>((uint64_t)head);
+        this->insert_arg<T>((T)head);
     
     //cout << " head = " << head << endl;
     return this->set_args(args...);
