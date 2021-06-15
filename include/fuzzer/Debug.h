@@ -52,8 +52,9 @@ template<class T> void stack_display(uc_engine* uc)
 template<> void stack_display<AMD64>(uc_engine* uc)
 {
     uint64_t rsp;
-    uint64_t stack_0,stack_8,stack_16,stack_24,stack_32,stack_r8;
+    uint64_t stack_0,stack_8,stack_16,stack_24,stack_32,stack_r8,stack_r16;
     uc_reg_read(uc,UC_X86_REG_RSP,&rsp);
+    uc_mem_read(uc,rsp-16,&stack_r16,8);
     uc_mem_read(uc,rsp-8,&stack_r8,8);
     uc_mem_read(uc,rsp,&stack_0,8);
     uc_mem_read(uc,rsp+8,&stack_8,8);
@@ -61,8 +62,9 @@ template<> void stack_display<AMD64>(uc_engine* uc)
     uc_mem_read(uc,rsp+24,&stack_24,8);
     uc_mem_read(uc,rsp+32,&stack_32,8);
     cout << "-------------------- Stack -----------------------"<< endl;
+    cout << hex <<"0x" << rsp-16 << " \t|\t "  << stack_r16 << endl; 
     cout << hex <<"0x" << rsp-8 << " \t|\t "  << stack_r8 << endl; 
-    cout << hex <<"0x" << rsp << " \t|\t "  << stack_0 << " <-- esp" << endl;
+    cout << hex <<"0x" << rsp << " \t|\t "  << stack_0 << " <-- rsp" << endl;
     cout << hex <<"0x" << rsp+8 << " \t|\t " << stack_8 << endl;
     cout << hex <<"0x" << rsp+16 << " \t|\t " << stack_16 << endl;
     cout << hex <<"0x" << rsp+24 << " \t|\t " << stack_24 << endl;

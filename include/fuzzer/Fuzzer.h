@@ -28,12 +28,15 @@ Fuzzer基于Unicorn来实现任意架构二进制文件模拟，通过hook函数
 */
 class Fuzzer
 {
-
+protected:
+typedef vector<uint64_t> address_list;
+typedef Runtime* Runtime_pointer;
+typedef Memory* Memory_pointer;
+typedef char* char_pointer;
+#define  multiple_type template<class ...Args> void
 public:
-
     // 构造函数初始化
     Fuzzer(string target, uint64_t start, uint64_t end, uc_arch arch, uc_mode mode):target(target){
-        
         //初始化Unicorn  运行时 和 内存映射 对象对象
         uc_open(arch, mode, &(this->uc));
         if(start < Runtime().base() || end < Runtime().base() )
@@ -47,13 +50,10 @@ public:
         if(!mem->mem_map(rt->base(),(size_t)target_size,UC_PROT_ALL))
             abort();
         map_target();
-
         }
-
     Fuzzer(Fuzzer const& fuzzer){
         cout << "Do not copy this member,or you will get one UAF..." << endl;
     }
-
     /*
     Fuzzer operator = (Fuzzer fuzzer){
        //cout << "Do not copy this member,or you will get one UAF..." << endl; 
@@ -66,41 +66,35 @@ public:
         }
 
     void entrance(void* data,size_t size);    // 设置函数 入口和结束地址。这部分之后需要内置一下，不需要用户调用。
-    template <class ...Args>
-    void start(Args... args);                 // 开始fuzz,会根据不同架构和模式自动将参数写入模拟执行的函数
+    multiple_type start(Args... args);                 // 开始fuzz,会根据不同架构和模式自动将参数写入模拟执行的函数
     //还需要提供一个自定义的参数入口
     //void 写入数据到某个寄存器或者push入栈中
 
-    template<class ...Args>
-    void skip(uint64_t head,Args...args);      // 设定一些需要跳过的地址
+    multiple_type skip(uint64_t head,Args...args);      // 设定一些需要跳过的地址
     void skip();
     void add_hook(hook_type type,void (*hook_ext)       // 载入用户自定义的hook函数
     (uc_engine* uc, uint64_t addr, uint32_t size, void* user_data));                         
 
 protected:
-
     bool load_target();         //  载入目标到内存(bin_buffer)中
     bool map_target();          //  映射bin_buffer内容到内存中
-    //template<class T> void print_register();
 
 private:
-
-    Runtime* rt;
-    Memory* mem;
+    Runtime_pointer rt;
+    Memory_pointer mem;
     string target;
     int target_size;
-    char* bin_buffer;
+    char_pointer bin_buffer;
     uc_engine *uc;
     uc_err err;
-    vector<uint64_t> skip_address;
+    address_list skip_address;
 };
 
 
 //  开始 fuzz 流程
 //  流程 1.从缓冲区将代码映射到内存 2.初始化寄存器 3.根据不同架构函数调用约定传递参数 4. 设置钩子检测覆盖率和内存错误
 
-template <class ...Args>
-void Fuzzer::start(Args... args)    
+multiple_type Fuzzer::start(Args... args)    
 {
     //写入对应参数
     mem->set_args(args...);
@@ -118,12 +112,12 @@ void Fuzzer::start(Args... args)
     }
 }
 
-template<class ...Args>
-void Fuzzer::skip(uint64_t head,Args...args)
+multiple_type Fuzzer::skip(uint64_t head,Args...args)
 {
     (this->skip_address).push_back(head);
     skip(args...); 
 }
+
 void Fuzzer::skip()
 {
     skip_addr.insert(skip_addr.end(),this->skip_address.begin(),this->skip_address.end());
