@@ -3,7 +3,7 @@ ifeq ($(shell uname),Darwin)
 CC = $(shell whereis clang)
 CXX = $(shell whereis clang++)
 CFLAGS = -O2 --std=c++11
-INCLUDE = -I include/
+INCLUDE = -I include/ -I src/
 LIB = lib/Darwin/libunicorn.a
 LDFLAGS = $(INCLUDE) $(LIB) 
 FUZZER = -fsanitize=fuzzer#,address
@@ -12,7 +12,7 @@ else
 CC = clang
 CXX = clang++
 CFLAGS = -O2 --std=c++11 -lpthread
-INCLUDE = -I include/
+INCLUDE = -I include/ -I src/
 #LIB = lib/Linux/libunicorn.a
 LIB = bin/libunicorn.so
 LDFLAGS = $(INCLUDE) $(LIB) -Wl,-rpath=$(shell pwd)/bin
